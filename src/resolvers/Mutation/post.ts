@@ -1,3 +1,4 @@
+import { canUserMutatePost } from "./../../utils/canUserMutatePost"
 import { Post, Prisma } from "@prisma/client"
 import { Context } from "../../index"
 
@@ -16,11 +17,15 @@ interface PostPayloadType {
 }
 
 export const postResolvers = {
-  	postCreate: async (
+	postCreate: async (
 		_: any,
 		{ post }: PostArgs,
-		{ prisma }: Context
+		{ prisma, userInfo }: Context
 	): Promise<PostPayloadType> => {
+		// do this with middleware instead
+		if (!userInfo)
+			return { userErrors: [{ message: "Forbidden access" }], post: null }
+
 		const { title, content } = post
 		// validate data
 		if (!title || !content)
@@ -35,7 +40,7 @@ export const postResolvers = {
 				data: {
 					title,
 					content,
-					authorId: 1,
+					authorId: userInfo.userId,
 				},
 			}),
 		}
@@ -44,8 +49,19 @@ export const postResolvers = {
 	postUpdate: async (
 		_: any,
 		{ postId, post }: { postId: string; post: PostArgs["post"] },
-		{ prisma }: Context
+		{ prisma, userInfo }: Context
 	): Promise<PostPayloadType> => {
+		// do this with middleware instead
+		if (!userInfo)
+			return { userErrors: [{ message: "Forbidden access" }], post: null }
+
+		const error = await canUserMutatePost({
+			userId: userInfo.userId,
+			postId: Number(postId),
+			prisma,
+		})
+		if (error) return error
+
 		const { title, content } = post
 		if (!title && !content)
 			return {
@@ -80,11 +96,21 @@ export const postResolvers = {
 	postDelete: async (
 		_: any,
 		{ postId }: { postId: string },
-		{ prisma }: Context
+		{ prisma, userInfo }: Context
 	): Promise<PostPayloadType> => {
 		const post = await prisma.post.findUnique({
 			where: { id: Number(postId) },
 		})
+		// do this with middleware instead
+		if (!userInfo)
+			return { userErrors: [{ message: "Forbidden access" }], post: null }
+
+		const error = await canUserMutatePost({
+			userId: userInfo.userId,
+			postId: Number(postId),
+			prisma,
+		})
+		if (error) return error
 
 		if (!post)
 			return {
@@ -96,6 +122,55 @@ export const postResolvers = {
 		return {
 			userErrors: [],
 			post,
+		}
+	},
+
+	postPublish: async (
+		_: any,
+		{ postId }: { postId: string },
+		{ prisma, userInfo }: Context
+	) => {
+		// do this with middleware instead
+		if (!userInfo)
+			return { userErrors: [{ message: "Forbidden access" }], post: null }
+
+		const error = await canUserMutatePost({
+			userId: userInfo.userId,
+			postId: Number(postId),
+			prisma,
+		})
+		if (error) return error
+
+		return {
+			userErrors: [],
+			post: prisma.post.update({
+				where: { id: Number(postId) },
+				data: { published: true },
+			}),
+		}
+	},
+	postUnpublish: async (
+		_: any,
+		{ postId }: { postId: string },
+		{ prisma, userInfo }: Context
+	) => {
+		// do this with middleware instead
+		if (!userInfo)
+			return { userErrors: [{ message: "Forbidden access" }], post: null }
+
+		const error = await canUserMutatePost({
+			userId: userInfo.userId,
+			postId: Number(postId),
+			prisma,
+		})
+		if (error) return error
+
+		return {
+			userErrors: [],
+			post: prisma.post.update({
+				where: { id: Number(postId) },
+				data: { published: false },
+			}),
 		}
 	},
 }
