@@ -7,10 +7,12 @@ import { Context } from "../../index"
 import { JWT_SIGNATURE } from "../../keys"
 
 interface SignupArgs {
-	email: string
-	name: string
-	bio: string
-	password: string
+	credentials: {
+		email: string
+		password: string
+	}
+	name?: string
+	bio?: string
 }
 
 interface UserPayloadType {
@@ -23,9 +25,10 @@ interface UserPayloadType {
 export const authResolvers = {
 	signup: async (
 		_: any,
-		{ email, name, bio, password }: SignupArgs,
+		{ credentials, name, bio }: SignupArgs,
 		{ prisma }: Context
 	): Promise<UserPayloadType> => {
+		const { email, password } = credentials
 		const isEmail = validator.isEmail(email)
 
 		if (!isEmail)
@@ -71,11 +74,12 @@ export const authResolvers = {
 			},
 		})
 
-		const token = await JWT.sign(
-			{ userId: user.id, email: user.email },
-			JWT_SIGNATURE,
-			{ expiresIn: 360000 }
-		)
+		await prisma.profile.create({
+			data: {
+				bio,
+				userId: user.id,
+			},
+		})
 
 		return {
 			userErrors: [
@@ -83,7 +87,49 @@ export const authResolvers = {
 					message: "",
 				},
 			],
-			token,
+			token: JWT.sign({ userId: user.id, email: user.email }, JWT_SIGNATURE, {
+				expiresIn: 360000,
+			}),
+		}
+	},
+
+	signin: async (
+		_: any,
+		{ credentials }: SignupArgs,
+		{ prisma }: Context
+	): Promise<UserPayloadType> => {
+		const { email, password } = credentials
+		const user = await prisma.user.findUnique({ where: { email } })
+		if (!user)
+			return {
+				userErrors: [
+					{
+						message: "Invalid credentials",
+					},
+				],
+				token: null,
+			}
+
+		const isMatch = await bcrypt.compare(password, user.password)
+		if (!isMatch)
+			return {
+				userErrors: [
+					{
+						message: "Invalid credentials",
+					},
+				],
+				token: null,
+			}
+
+		return {
+			userErrors: [
+				{
+					message: "",
+				},
+			],
+			token: JWT.sign({ userId: user.id, email: user.email }, JWT_SIGNATURE, {
+				expiresIn: 360000,
+			}),
 		}
 	},
 }
