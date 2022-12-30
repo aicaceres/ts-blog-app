@@ -47,7 +47,7 @@ export default function Profile() {
 			>
 				<div>
 					<h1>{profile.user.name}</h1>
-					<p>{profile.user.bio}</p>
+					<p>{profile.bio}</p>
 				</div>
 				<div>{profile.isMyProfile ? <AddPostModal /> : null}</div>
 			</div>
@@ -60,9 +60,9 @@ export default function Profile() {
 							content={post.content}
 							date={post.createdAt}
 							id={post.id}
-              user={profile.user.name}
-              published={post.published}
-              isMyProfile={profile.isMyProfile}
+							user={profile.user.name}
+							published={post.published}
+							isMyProfile={profile.isMyProfile}
 						/>
 					)
 				})}
